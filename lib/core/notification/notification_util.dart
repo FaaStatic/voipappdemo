@@ -22,11 +22,31 @@ class NotificationUtil {
     enableVibration: true,
   );
 
-  Future<void> setupNotification() async {
+  Future<void> setupNotification(FirebaseMessaging fcm) async {
     await AwesomeNotifications()
         .initialize(null, [_channelAndroid], debug: true);
      await AwesomeNotifications().requestPermissionToSendNotifications();
-      
+      final settings = await fcm.requestPermission(
+    alert: true,
+    announcement: false,
+    badge: true,
+    carPlay: false,
+    criticalAlert: false,
+    provisional: false,
+    sound: true,
+  );
+  await fcm.setForegroundNotificationPresentationOptions(
+    alert: true,
+    badge: true,
+    sound: true,
+  );
+  if (settings.authorizationStatus == AuthorizationStatus.authorized) {
+  print('User granted permission');
+} else if (settings.authorizationStatus == AuthorizationStatus.provisional) {
+  print('User granted provisional permission');
+} else {
+  print('User declined or has not accepted permission');
+}
       }
 
   Future<void> showNotification(RemoteMessage message) async {

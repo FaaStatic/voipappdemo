@@ -21,29 +21,8 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   final fcm = FirebaseMessaging.instance;
-  final settings = await fcm.requestPermission(
-    alert: true,
-    announcement: false,
-    badge: true,
-    carPlay: false,
-    criticalAlert: false,
-    provisional: false,
-    sound: true,
-  );
-  await fcm.setForegroundNotificationPresentationOptions(
-    alert: true,
-    badge: true,
-    sound: true,
-  );
-  if (settings.authorizationStatus == AuthorizationStatus.authorized) {
-  print('User granted permission');
-} else if (settings.authorizationStatus == AuthorizationStatus.provisional) {
-  print('User granted provisional permission');
-} else {
-  print('User declined or has not accepted permission');
-}
+  await NotificationUtil().setupNotification(fcm);
   FirebaseMessaging.onBackgroundMessage(_handlerBackgroundMessage);
-  await NotificationUtil().setupNotification();
   final prefs = await SharedPreferences.getInstance();
   await dotenv.load(fileName: ".env");
   runApp(ProviderScope(overrides: [
