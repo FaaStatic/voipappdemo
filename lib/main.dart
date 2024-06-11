@@ -1,77 +1,121 @@
+import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:myapp/core/di/shared_preferences_injection.dart';
+import 'package:myapp/core/notification/notification_util.dart';
 import 'package:myapp/firebase_options.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  final prefs = await SharedPreferences.getInstance();
-  await dotenv.load(fileName: ".env");
-  runApp( ProviderScope(
-    overrides: [
-       sharedPreferencesInjection.overrideWithValue(prefs),
-    ],
-    child: const MyApp()));
+@pragma("vm:entry-point")
+Future<void> _handlerBackgroundMessage(RemoteMessage message) async {
+    await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  print("message received from background");
+  await NotificationUtil().showNotification(message);
 }
 
-class MyApp extends StatelessWidget {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  final fcm = FirebaseMessaging.instance;
+  final settings = await fcm.requestPermission(
+    alert: true,
+    announcement: false,
+    badge: true,
+    carPlay: false,
+    criticalAlert: false,
+    provisional: false,
+    sound: true,
+  );
+  await fcm.setForegroundNotificationPresentationOptions(
+    alert: true,
+    badge: true,
+    sound: true,
+  );
+  if (settings.authorizationStatus == AuthorizationStatus.authorized) {
+  print('User granted permission');
+} else if (settings.authorizationStatus == AuthorizationStatus.provisional) {
+  print('User granted provisional permission');
+} else {
+  print('User declined or has not accepted permission');
+}
+  FirebaseMessaging.onBackgroundMessage(_handlerBackgroundMessage);
+  await NotificationUtil().setupNotification();
+  final prefs = await SharedPreferences.getInstance();
+  await dotenv.load(fileName: ".env");
+  runApp(ProviderScope(overrides: [
+    sharedPreferencesInjection.overrideWithValue(prefs),
+  ], child: const MyApp()));
+}
+
+class MyApp extends ConsumerStatefulWidget {
   const MyApp({super.key});
 
-  // This widget is the root of your application.
+  @override
+  ConsumerState<ConsumerStatefulWidget> createState() => _MyAppState();
+}
+
+class _MyAppState extends ConsumerState<MyApp> {
+  @override
+  void initState() {
+    FirebaseMessaging.onMessage.listen((message) {
+      print("message received from foreground");
+
+      NotificationUtil().showNotification(message);
+    });
+    FirebaseMessaging.onMessageOpenedApp.listen((message) {
+      print("message received from forebackground");
+
+      NotificationUtil().showNotification(message);
+    });
+    super.initState();
+  }
+
+  @override
+  void dispose() {
+    AwesomeNotifications().dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-        useMaterial3: true,
-      ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      themeMode: ThemeMode.dark,
+      theme: ThemeData(useMaterial3: true),
+      home: const Root(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
+class Root extends ConsumerStatefulWidget {
+  const Root({super.key});
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  ConsumerState<ConsumerStatefulWidget> createState() => _RootState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+class _RootState extends ConsumerState<Root> {
+  @override
+  void initState() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      getFirebaseToken();
+    });
+    super.initState();
+  }
 
-  void _incrementCounter() {
+  @override
+  void dispose() {
+    super.dispose();
+  }
+
+  int _counter = 0;
+  String tokenFcm = "";
+
+  Future<void> _incrementCounter() async {
+    await NotificationUtil().showNotificationTest();
     setState(() {
       // This call to setState tells the Flutter framework that something has
       // changed in this State, which causes it to rerun the build method below
@@ -79,6 +123,18 @@ class _MyHomePageState extends State<MyHomePage> {
       // _counter without calling setState(), then the build method would not be
       // called again, and so nothing would appear to happen.
       _counter++;
+    });
+  }
+
+  Future<void> getFirebaseToken() async {
+    final token = await FirebaseMessaging.instance.getToken();
+
+    if (kDebugMode) {
+      print(token);
+    }
+
+    setState(() {
+      tokenFcm = token ?? "";
     });
   }
 
@@ -98,7 +154,7 @@ class _MyHomePageState extends State<MyHomePage> {
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         // Here we take the value from the MyHomePage object that was created by
         // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
+        title: const Text("On Progress"),
       ),
       body: Center(
         // Center is a layout widget. It takes a single child and positions it
@@ -119,6 +175,9 @@ class _MyHomePageState extends State<MyHomePage> {
           // wireframe for each widget.
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
+            Text(
+              'Your firebase token : $tokenFcm',
+            ),
             const Text(
               'You have pushed the button this many times:',
             ),
