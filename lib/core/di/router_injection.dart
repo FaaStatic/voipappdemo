@@ -6,4 +6,5 @@ part 'router_injection.g.dart';
 
 @riverpod
 // Suggested code may be subject to a license. Learn more: ~LicenseLog:1569984024.
-GoRouter routerInjection(RouterInjectionRef ref) => RouteManager().managerRoutes;
+GoRouter routerInjection(RouterInjectionRef ref) =>
+    RouteManager().managerRoutes;
